@@ -29,10 +29,10 @@ Now, before listing the actions we need to perform, a short digression on *name 
 -  DNS Domain: vs DNS Zone: Whilst domain is a logical division, a zone is a physical division of the DNS name space. Usually you have a 1:1 relationship between a Domain and its Zone.
 - Domain name registar: A company from which you can buy a public domain name it is known, i.e. addressable, from the top level domains (TLD);
 - Sub-zone: In DNS Infrastructure, name resolution works hierarchically:
-  - . : root domain name
-  - me. : top level domain
-  - learningk8s.me. :first level domain
-  - azure.learningk8s.me. : second level domain (for example, this is a sub-domain (zone) of the level above!)
+  - .                          : root domain name
+  - me.                        : top level domain
+  - learningk8s.me.            : first level domain
+  - azure.learningk8s.me.      : second level domain (for example, this is a sub-domain (zone) of the level above!)
   - app1.azure.learningk8s.me. : NS record
 
 Every single domain, has it own DNS serve(s) which are **authoritative**, that is, they know how to resolve a specific zone and, when they do not, at least they forward you to DNS Server **delegated** for that domain (zone).
@@ -59,10 +59,49 @@ So, what do we need to do?
 
 If you've done everything correct you should see from the portal the following:
 ![azurednszone](./img/dns-childzone-overview.png)
-As you can see from the picture, from within  `learningk8s.me` overview page, you have the configuration (in yeallow) which says that for everything belonging to the  `azure` subdomain you should go to those delegated name server, the one which contain the A record for the name of our (future) applications.
+As you can see from the picture, from within  `learningk8s.me` overview page, you have the configuration (in yellow) which says that for everything belonging to the  `azure` subdomain you should go to those delegated name server, the one which contain the A record for the name of our (future) applications.
 
+##### VERIFY DELEGATION
+Create a A record within the `azure.learningk8s.me`:
+- name: test
+- value: 192.192.1.1
 
+```ssh
+$ nslookup test.azure.learningk8s.me
+Server:  H388X.home # DNS server by default, which is one provided by the ISP. 
+Address:  192.168.1.1
 
+Non-authoritative answer: # we were able to resolve the name via delegation, but we do not know which server resolved the name
+Name:    test.azure.learningk8s.me
+Address:  192.192.1.1
+```
+```
+$ nslookup test.azure.learningk8s.me ns1-34.azure-dns.com. # we specify one of the Azure DNS server linked to the learningk8s.me zone
+Server:  UnKnown
+Address:  150.171.10.34
 
+Name:    test.azure.learningk8s.me
+Served by: # it says the name server is not authorative for the name provided, but you can retrieve it from one of the below name servers which are authorative for the zone azure.learningk8s.me
+- ns1-38.azure-dns.com
+
+          azure.learningk8s.me
+- ns2-38.azure-dns.net
+
+          azure.learningk8s.me
+- ns3-38.azure-dns.org
+
+          azure.learningk8s.me
+- ns4-38.azure-dns.info
+
+          azure.learningk8s.me
+```
+```
+$ nslookup test.azure.learningk8s.me ns1-38.azure-dns.com # we specify one of the Azure DNS server authoritative for azure.learningk8s.me zone
+Server:  UnKnown
+Address:  150.171.10.38
+
+Name:    test.azure.learningk8s.me
+Address:  192.192.1.1 # ip found!
+```
 
 https://docs.okd.io/4.9/installing/installing_azure/installing-azure-customizations.html
