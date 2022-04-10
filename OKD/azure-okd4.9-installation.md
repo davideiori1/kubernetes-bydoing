@@ -1,3 +1,4 @@
+
 # INSTALL OKD4.9 ON AZURE
 
 Following guide is based on the official [installation procedure](https://docs.okd.io/4.9/installing/installing_azure/preparing-to-install-on-azure.html).
@@ -16,19 +17,51 @@ Following guide is based on the official [installation procedure](https://docs.o
 |[X] |[Existing VNET](https://docs.okd.io/4.9/installing/installing_azure/installing-azure-vnet.html#installing-azure-vnet)| We go for this option just for the sake of customizing a bit more our installer|
 
 ### AZURE ACCOUNT CONFIGURATION
-After having chosen the type of installation, we need to [configure our Azure account](https://docs.okd.io/4.9/installing/installing_azure/installing-azure-account.html#installing-azure-account). You do not need to follow the linked guide, just keep reading as I will walk you through the task you need to perform for our specific type of installation.
+After having chosen the type of installation, we need to [configure our Azure account](https://docs.okd.io/4.9/installing/installing_azure/installing-azure-account.html#installing-azure-account). You do not need to follow the linked guide, just keep reading as I will walk you through the tasks you need to perform for our specific type of installation.
 
 #### CONFIGURING A PUBLIC DNS ZONE IN AZURE
-Our cluster will be publicy available over the Internet, therefore to install OKD, the Microsoft Azure account you use must have a dedicated public hosted DNS zone in your account. This zone must be authoritative for the domain. This service provides cluster DNS resolution and name lookup for external connections to the cluster.
-- We need to have a public domain. If you do not have one, you can purchase a domain for **free** at [register.it](https://www.register.it/)
-- Now that you have a DNS domain, in my case `learningk8s.me`, you can use Azure DNS to host it and manage your DNS records (following steps are taken from this [tutorial](https://docs.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns):
-  - Create your parent DNS zone: 
--If you are using an existing domain,  and registrar, migrate its DNS to Azure. See Migrate an active DNS name to Azure App Service in the Azure documentation.
+Our cluster will be publicly available over the Internet, therefore to install OKD, the Microsoft Azure account you use must have a dedicated *public hosted DNS zone* in your account. The DNS zone must be authoritative for the domain. This service provides cluster DNS resolution and name lookup for external connections to the cluster.
 
--Configure DNS for your domain. Follow the steps in the Tutorial: Host your domain in Azure DNS in the Azure documentation to create a public hosted zone for your domain or subdomain, extract the new authoritative name servers, and update the registrar records for the name servers that your domain uses.
-Use an appropriate root domain, such as openshiftcorp.com, or subdomain, such as clusters.openshiftcorp.com.
+--------------
+Now, before listing the actions we need to perform, a short digression on *name resolution*, a topic which I still do not fully manage on my own. I'll try hereby to explain some core concepts:
+- What's the goal: Make use of the Domain Name Service infrastructure built around the world to perform the translation from a human-friendly way of identifying resources, es: www.app1.azure.learningk8s.me, to a machine-friendly way of identifying resources, es: 10.123.1.2.
+-  DNS Servers: Are the components of the DNS Infrastructure that either make the translation or forward the requester to the next server of the name resolution chain
+-  DNS Domain: vs DNS Zone: Whilst domain is a logical division, a zone is a physical division of the DNS name space. Usually you have a 1:1 relationship between a Domain and its Zone.
+- Domain name registar: A company from which you can buy a public domain name it is known, i.e. addressable, from the top level domains (TLD);
+- Sub-zone: In DNS Infrastructure, name resolution works hierarchically:
+  - . : root domain name
+  - me. : top level domain
+  - learningk8s.me. :first level domain
+  - azure.learningk8s.me. : second level domain (for example, this is a sub-domain (zone) of the level above!)
+  - app1.azure.learningk8s.me. : NS record
 
--If you use a subdomain, follow your company’s procedures to add its delegation records to the parent domain.
+Every single domain, has it own DNS serve(s) which are **authoritative**, that is, they know how to resolve a specific zone and, when they do not, at least they forward you to DNS Server **delegated** for that domain (zone).
+The following sequence diagram try to explain the whole name resolution interaction:
+```mermaid
+sequenceDiagram
+client  ->  local  DNS  server: What's IP address of app1.azure.learningk8s.me?
+local  DNS  server  -> ".": I do not know, I forward you to the root server
+"."->  me: I forward you to the TLD server authoritative for the child zone "me"
+me  ->  k8slearning: I forward you to the DNS server authoritative for the child zone "learning"
+k8slearning  ->  azure: I am not authoritative for the zone "azure", as I have delegated this zone to this child domain name server
+azure  ->  client: YES! I know the IP address!. Here you are, 10.243.1.2
+```
+--------------
+
+So, what do we need to do?
+
+ 1. We need to have a public domain. If you do not have one, you can purchase a domain for **free** at [register.it](https://www.register.it/)
+ 2. Now that you have a DNS domain, in my case `learningk8s.me`, you can use Azure DNS to host it and manage your DNS records. That means we use some domain name servers given by Azure and those servers become **authoritative** for the domain we have created in step 1 (following steps are taken from this [tutorial](https://docs.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns):
+ 3. In order to do so, we need to  create in azure a [parent DNS zone](https://docs.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns#create-a-dns-zone) using the same name you used at the creation of your domain, `learningk8s.me`
+ 4.  Retrieve the name servers from the DNS zone page
+ 5. Go the administration console of your registar and configure it to use the Azure DNS name server to resolve names belonging to that domain. In this way, you have delegated Azure to be authoritative over the `learningk8s.me` zone.
+ 6. As our final goal, is to not build only one k8s cluster, but many, and on different platforms, we need to [create a child zone](https://docs.microsoft.com/en-us/azure/dns/tutorial-public-dns-zones-child#create-child-dns-zone-via-create-dns-zone), azure.learningk8s.me. This zone is the one which will contain our A record belonging to the applications that will run on the cluster.
+
+If you've done everything correct you should see from the portal the following:
+![azurednszone](./img/dns-childzone-overview.png)
+As you can see from the picture, from within  `learningk8s.me` overview page, you have the configuration (in yeallow) which says that for everything belonging to the  `azure` subdomain you should go to those delegated name server, the one which contain the A record for the name of our (future) applications.
+
+
 
 
 
